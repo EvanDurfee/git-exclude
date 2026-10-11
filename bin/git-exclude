@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+# set -x
+
+PROGRAM="$(basename "$0")"
+
+
+usage() {
+	cat <<EOF
+Usage: $PROGRAM [OPTIONS] [PATTERN...]
+
+Add each PATTERN to the repository's info/exclude file, which ignores files
+like .gitignore does but without being committed. Patterns already in the file
+are skipped. With no PATTERN, the file is opened in the editor.
+
+Patterns use .gitignore syntax and are matched relative to the top of the
+working tree, wherever the command is run from.
+
+Options:
+  -h, --help        Show this help message and exit
+  -e, --edit        Open the exclude file in the editor after adding PATTERN...
+EOF
+}
+
+
+die() {
+	echo "$PROGRAM: $*" >&2
+	exit 1
+}
+
+
+main() {
+	# Require util-linux (enhanced) getopt, which exits 4 when probed with -T
+	getopt -T >/dev/null && die "GNU enhanced getopt is required"
+
+	local parsed
+	parsed="$(getopt --name "$PROGRAM" --options 'he' --longoptions 'help,edit' -- "$@")" \
+		|| { usage >&2; exit 2; }
+	eval set -- "$parsed"
+
+	local edit=false
+
+	while true; do
+		case "$1" in
+			-h | --help)
+				usage
+				exit 0
+				;;
+			-e | --edit)
+				edit=true
+				;;
+			--)
+				shift
+				break
+				;;
+			*)
+				die "unhandled option: $1"
+				;;
+		esac
+		shift
+	done
+
+	if [[ $# -eq 0 ]]; then
+		edit=true
+	fi
+
+	exclude "$edit" "$@"
+}
+
+
+# exclude edit [pattern...]
+exclude() {
+	if [[ $# -lt 1 ]]; then
+		die "exclude: expected <edit> [pattern...]"
+	fi
+
+	local edit="$1"
+	shift
+
+	local pattern
+	for pattern in "$@"; do
+		# A blank line matches nothing and a leading # makes a comment, so either would be lost
+		[[ "$pattern" =~ [^[:space:]] ]] || die "empty pattern"
+		[[ "$pattern" != \#* ]] || die "pattern would be a comment: $pattern (escape it as \\$pattern)"
+		[[ "$pattern" != *$'\n'* ]] || die "pattern contains a newline"
+	done
+
+	git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
+	[ "$(git rev-parse --is-bare-repository)" = false ] || die "a bare repository has no working tree to exclude from"
+
+	# --git-path follows worktrees (info/ lives in the common dir), GIT_DIR, GIT_COMMON_DIR and gitdir: files
+	local file
+	file="$(git rev-parse --path-format=absolute --git-path info/exclude)"
+	mkdir -p "$(dirname "$file")"
+	touch "$file"
+
+	for pattern in "$@"; do
+		if grep --quiet --fixed-strings --line-regexp -- "$pattern" "$file"; then
+			continue
+		fi
+		# Keep the new pattern off the end of a last line with no newline
+		if [ -s "$file" ] && [ -n "$(tail -c 1 "$file")" ]; then
+			echo >>"$file"
+		fi
+		printf '%s\n' "$pattern" >>"$file"
+	done
+
+	if [ "$edit" = true ]; then
+		# Honours GIT_EDITOR, core.editor, VISUAL and EDITOR, run through the shell as git does
+		local editor
+		editor="$(git var GIT_EDITOR)"
+		sh -c "$editor \"\$@\"" "$editor" "$file"
+	fi
+}
+
+
+main "$@"

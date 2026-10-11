@@ -1,0 +1,24 @@
+#compdef git-exclude
+#description add patterns to the repository's info/exclude file
+
+# Completes both `git-exclude ...` and `git exclude ...`: _git dispatches to _git-exclude
+# with the words shifted so words[1] is the command name either way.
+
+# Untracked paths relative to the top of the working tree, where patterns are matched from
+(( $+functions[__git_exclude_untracked] )) ||
+__git_exclude_untracked() {
+	local top
+	local -a paths
+	top="$(_call_program toplevel git rev-parse --show-toplevel 2>/dev/null)" || return 1
+	paths=(${(f)"$(_call_program untracked git -C ${(q)top} ls-files --others --exclude-standard --directory --no-empty-directory 2>/dev/null)"})
+	_wanted untracked expl 'untracked path' compadd -a paths
+}
+
+_git-exclude() {
+	_arguments -S -s \
+		'(- *)'{-h,--help}'[show help message and exit]' \
+		'(-e --edit)'{-e,--edit}'[open the exclude file in the editor after adding patterns]' \
+		'*:pattern:__git_exclude_untracked'
+}
+
+_git-exclude "$@"

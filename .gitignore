@@ -1,0 +1,2 @@
+# Built from man/git-exclude.adoc by asciidoctor
+/man/*.1

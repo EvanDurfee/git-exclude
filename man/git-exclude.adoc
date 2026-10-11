@@ -1,0 +1,91 @@
+= git-exclude(1)
+:doctype: manpage
+:manmanual: Git Manual
+:mansource: git-exclude
+
+== NAME
+
+git-exclude - Add patterns to the repository's info/exclude file
+
+== SYNOPSIS
+
+[verse]
+*git* *exclude* [*-e* | *--edit*] [_<pattern>_...]
+
+== DESCRIPTION
+
+Append each _<pattern>_ to the repository's *info/exclude* file, then open the file in the editor if *--edit* is given or there is no _<pattern>_.
+
+Patterns in *info/exclude* ignore files just as patterns in a *.gitignore* file do, but the file is not part of the working tree, so it is never committed or shared.
+It suits files that only matter to one clone, such as editor settings or local scratch files.
+See *gitignore*(5) for the pattern syntax.
+
+The file is found with *git* *rev-parse* *--git-path* *info/exclude*, so the command works from any subdirectory, from a linked worktree, and with *GIT_DIR* or a *.git* file pointing elsewhere.
+Linked worktrees share the *info/exclude* file of the main repository, since that is the only one git reads; a pattern added from any worktree applies to all of them.
+The file and its *info* directory are created if they are missing.
+
+Each _<pattern>_ is added on its own line, exactly as given, unless the file already has a line that is identical to it.
+Patterns are matched relative to the top of the working tree, not the directory the command is run from (see "PATTERNS" below).
+
+== OPTIONS
+
+*-h*, *--help*::
+	Show a usage summary and exit.
+
+*-e*, *--edit*::
+	Open the exclude file in the editor after adding the patterns.
+	This is the default when no _<pattern>_ is given.
++
+The editor is chosen as for *git-commit*(1), from *GIT_EDITOR*, *core.editor*, *VISUAL* and *EDITOR*, in that order (see *git-var*(1)).
+
+Patterns that start with *-* must follow *--* to be read as patterns rather than options.
+
+== PATTERNS
+
+Patterns are written to the file as given, and git reads them relative to the top of the working tree, as it would for a *.gitignore* there.
+A pattern with no slash, or only a trailing one, matches at any depth; one with a slash at the start or in the middle matches only from the top:
+
+----
+*.log       any file ending in .log, anywhere
+build/      any directory named build, anywhere
+/build/     only the build directory at the top
+docs/notes  only docs/notes at the top
+----
+
+So running *git* *exclude* *notes* in *docs/* ignores every file named *notes*, and *git* *exclude* *docs/notes* is needed to ignore only that one.
+Shell completion offers untracked paths relative to the top for this reason.
+
+Patterns that git would not read as patterns are rejected: an empty or blank pattern, one containing a newline, and one starting with *+#+*, which would be a comment.
+Write *+\#+* to match a name that starts with *+#+*.
+
+== EXAMPLES
+
+Ignore local editor settings:
+
+----
+$ git exclude .vscode/ '*.swp'
+----
+
+Ignore a scratch file and review the exclude file:
+
+----
+$ git exclude --edit /scratch.txt
+----
+
+Open the exclude file to edit it by hand:
+
+----
+$ git exclude
+----
+
+== BUGS
+
+Excluding a path has no effect on files that are already tracked; remove them from the index with *git* *rm* *--cached* first.
+
+A bare repository has no working tree, so the command refuses to run in one.
+
+Duplicates are only detected by exact match; a pattern that is written differently but matches the same files is still added.
+
+== SEE ALSO
+
+*gitignore*(5), *git-check-ignore*(1), *git-var*(1), *git-worktree*(1)
